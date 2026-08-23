@@ -1,6 +1,6 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+# This loads DATABASE_URL from .env.
 
 class Settings(BaseSettings):
     database_url: str
