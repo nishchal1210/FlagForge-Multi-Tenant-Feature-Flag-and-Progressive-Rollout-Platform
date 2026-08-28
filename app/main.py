@@ -18,6 +18,9 @@ app.include_router(
     prefix="/api/v1",
 )
 
+# This attaches all routes collected by api_router to the application.
+# The prefix /api/v1 is automatically placed before every route.
+
 
 @app.get("/health")
 def health_check() -> dict[str, str]:

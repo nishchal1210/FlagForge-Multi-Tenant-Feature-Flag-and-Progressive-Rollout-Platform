@@ -75,3 +75,10 @@ class FeatureFlag(Base):
     environment: Mapped["Environment"] = relationship(
         back_populates="flags",
     )
+
+    rules: Mapped[list["TargetingRule"]] = relationship(
+        back_populates="feature_flag",
+        cascade="all, delete-orphan", 
+        # Because of delete-orphan, deleting a flag will also delete its rules and their conditions.
+        order_by="TargetingRule.priority",
+    )

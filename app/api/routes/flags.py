@@ -3,17 +3,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.models.environment import Environment
 from app.models.feature_flag import FeatureFlag
 from app.models.project import Project
+from app.models.targeting_rule import TargetingRule
+from app.schemas.evaluation import EvaluationRequest, EvaluationResponse
 from app.schemas.feature_flag import (
     FeatureFlagCreate,
     FeatureFlagResponse,
     FeatureFlagUpdate,
 )
+from app.services.evaluator import evaluate_flag
 
 
 router = APIRouter(tags=["Feature Flags"])
@@ -152,6 +155,56 @@ def get_flag(
         db, tenant_id, project_id, environment_id
     )
     return get_flag_for_environment(db, environment.id, flag_key)
+
+
+@router.post(
+    f"{FLAGS_PATH}/{{flag_key}}/evaluate",
+    response_model=EvaluationResponse,
+)
+def evaluate_flag_preview(
+    tenant_id: uuid.UUID,
+    project_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    flag_key: str,
+    payload: EvaluationRequest,
+    db: DatabaseSession,
+) -> EvaluationResponse:
+    flag = db.scalar(
+        select(FeatureFlag)
+        .options(
+            selectinload(FeatureFlag.rules)
+            .selectinload(TargetingRule.conditions)
+        )
+        .join(FeatureFlag.environment)
+        .join(Environment.project)
+        .where(
+            FeatureFlag.key == flag_key,
+            FeatureFlag.environment_id == environment_id,
+            Environment.id == environment_id,
+            Environment.project_id == project_id,
+            Project.id == project_id,
+            Project.tenant_id == tenant_id,
+        )
+    )
+
+    if flag is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feature flag not found",
+        )
+
+    result = evaluate_flag(
+        flag=flag,
+        user=payload.user,
+    )
+
+    return EvaluationResponse(
+        flag_key=flag.key,
+        value=result.value,
+        reason=result.reason,
+        matched_rule_priority=result.matched_rule_priority,
+        bucket=result.bucket,
+    )
 
 
 @router.patch(

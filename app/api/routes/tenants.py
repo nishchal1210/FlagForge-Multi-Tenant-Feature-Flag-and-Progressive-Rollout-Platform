@@ -23,7 +23,8 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
 )
 def create_tenant(
     payload: TenantCreate,
-    db: DatabaseSession,
+    db: DatabaseSession, # calls get_db and opens a session
+    # get_db returns a session
 ) -> Tenant:
     existing = db.scalar(
         select(Tenant).where(Tenant.name == payload.name)
@@ -37,9 +38,9 @@ def create_tenant(
 
     tenant = Tenant(name=payload.name)
 
-    db.add(tenant)
-    db.commit()
-    db.refresh(tenant)
+    db.add(tenant) # place the new tenant in into the current session
+    db.commit() # save the transaction permanently 
+    db.refresh(tenant) 
 
     return tenant
 
