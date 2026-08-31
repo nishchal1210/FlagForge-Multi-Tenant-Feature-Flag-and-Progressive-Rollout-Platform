@@ -4,7 +4,10 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func, Integer, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from feature_flag import FeatureFlag
+from project import Project
+from environment_sdk_key import EnvironmentSDKKey
+from environment_config_version import EnvironmentConfigVersion
 from app.db.base import Base
 
 
