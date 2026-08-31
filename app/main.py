@@ -3,6 +3,9 @@ from fastapi import FastAPI
 
 from app.api.router import api_router
 
+from app.api.routes.sdk_config import router as sdk_router
+
+
 
 app = FastAPI(
     title="FlagForge Control Plane",
@@ -16,6 +19,11 @@ app = FastAPI(
 app.include_router(
     api_router,
     prefix="/api/v1",
+)
+
+app.include_router(
+    sdk_router,
+    prefix="/api/sdk/v1",
 )
 
 # This attaches all routes collected by api_router to the application.

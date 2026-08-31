@@ -1,4 +1,5 @@
 import hashlib
+# produces a stable has for percentage rollouts
 from dataclasses import dataclass
 from typing import Any
 
@@ -7,31 +8,42 @@ from app.models.rule_condition import RuleCondition
 from app.models.targeting_rule import TargetingRule
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True) # instance cannot be changed after created 
 class EvaluationResult:
     value: bool
     reason: str
     matched_rule_priority: int | None = None
-    bucket: int | None = None
+    bucket: int | None = None # the user's rollout bucket for percentage rules.
 
 def calculate_bucket(
     flag_id: str,
     user_key: str,
 ) -> int:
     data = f"{flag_id}:{user_key}".encode("utf-8")
+    # The function combines the flag ID and user key
+    # since same user can get different buckets for diff flags
 
     digest = hashlib.sha256(data).digest()
+    # This creates a SHA-256 hash.
 
     number = int.from_bytes(
         digest[:8],
+        # The first eight hash bytes are converted into an integer.
         byteorder="big",
     )
 
-    return number % 10000
+    return number % 10000 # provides 10000 possible buckets
+
+#  {
+#     "key": "user-123",
+#     "country": "India",
+#     "plan": "premium",
+# } -> example user 
 
 def condition_matches(
     condition: RuleCondition,
     user: dict[str, Any],
+    # This function checks whether one targeting condition matches the user's attributes.
 ) -> bool:
     if condition.attribute not in user:
         return False
@@ -54,6 +66,7 @@ def condition_matches(
     return False
 
 def evaluate_rule(
+    # This function runs only after the rule's conditions have matched.
     flag: FeatureFlag,
     rule: TargetingRule,
     user: dict[str, Any],

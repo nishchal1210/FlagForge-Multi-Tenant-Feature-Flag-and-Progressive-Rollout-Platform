@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func, Integer, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -40,10 +40,17 @@ class Environment(Base):
         nullable=False,
     )
 
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
+    )
+
+    published_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
     )
 
     project: Mapped["Project"] = relationship(
@@ -51,6 +58,17 @@ class Environment(Base):
     )
 
     flags: Mapped[list["FeatureFlag"]] = relationship(
+        back_populates="environment",
+        cascade="all, delete-orphan",
+    )
+
+    config_versions: Mapped[list["EnvironmentConfigVersion"]] = relationship(
+        back_populates="environment",
+        cascade="all, delete-orphan",
+        order_by="EnvironmentConfigVersion.version",
+    )
+
+    sdk_keys: Mapped[list["EnvironmentSDKKey"]] = relationship(
         back_populates="environment",
         cascade="all, delete-orphan",
     )
