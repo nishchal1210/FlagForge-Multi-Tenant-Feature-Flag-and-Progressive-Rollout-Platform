@@ -4,10 +4,10 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func, Integer, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from feature_flag import FeatureFlag
-from project import Project
-from environment_sdk_key import EnvironmentSDKKey
-from environment_config_version import EnvironmentConfigVersion
+from app.models.feature_flag import FeatureFlag
+from app.models.project import Project
+from app.models.environment_sdk_key import EnvironmentSDKKey
+from app.models.environment_config_version import EnvironmentConfigVersion
 from app.db.base import Base
 
 
@@ -69,7 +69,8 @@ class Environment(Base):
         back_populates="environment",
         cascade="all, delete-orphan",
         order_by="EnvironmentConfigVersion.version",
-    )
+    ) # connecting all keys to its evironment which allows 
+      # environment.sdk_keys
 
     sdk_keys: Mapped[list["EnvironmentSDKKey"]] = relationship(
         back_populates="environment",

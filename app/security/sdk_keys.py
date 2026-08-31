@@ -7,11 +7,15 @@ import uuid
 def generate_sdk_key(
     key_id: uuid.UUID,
 ) -> tuple[str, str]:
-    secret = secrets.token_urlsafe(32)
+    secret = secrets.token_urlsafe(32) # creates a random secret
 
     plain_key = (
         f"ff_env_{key_id.hex}_{secret}"
     )
+    # ff = flagforge
+    # env = environment scope dkey
+    # uuid: identify the db record
+    # proves that caller owns the key
 
     key_hash = hash_sdk_key(plain_key)
 
@@ -22,6 +26,7 @@ def hash_sdk_key(plain_key: str) -> str:
     return hashlib.sha256(
         plain_key.encode("utf-8")
     ).hexdigest()
+# This creates a 64-character hexadecimal SHA-256 digest.
 
 
 def verify_sdk_key(

@@ -66,4 +66,4 @@ class EnvironmentSDKKey(Base):
 
     environment: Mapped["Environment"] = relationship(
         back_populates="sdk_keys",
-    )
+    ) # connects each key to its environment
