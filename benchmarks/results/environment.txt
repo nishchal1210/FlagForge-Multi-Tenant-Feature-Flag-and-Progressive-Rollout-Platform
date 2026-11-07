@@ -1,0 +1,7 @@
+Python: 3.12.4
+OS: Windows-11-10.0.26300-SP0
+Processor: Intel64 Family 6 Model 154 Stepping 3, GenuineIntel
+Samples per repeat: 20000
+Repeats: 3
+Warmup per case: 2000
+Mode: sequential, one process, no realtime threads

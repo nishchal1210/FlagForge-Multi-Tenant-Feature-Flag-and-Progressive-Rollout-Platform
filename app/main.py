@@ -5,6 +5,35 @@ from app.api.router import api_router
 
 from app.api.routes.sdk_config import router as sdk_router
 
+import asyncio
+from contextlib import asynccontextmanager, suppress
+
+from fastapi import FastAPI
+
+from app.api.router import api_router
+from app.api.routes.sdk_config import (
+    router as sdk_router,
+)
+from app.core.redis import async_redis
+from app.realtime.redis_subscriber import (
+    listen_for_config_updates,
+)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    subscriber_task = asyncio.create_task(
+        listen_for_config_updates()
+    )
+
+    yield
+
+    subscriber_task.cancel()
+
+    with suppress(asyncio.CancelledError):
+        await subscriber_task
+
+    await async_redis.aclose()
+
 
 
 app = FastAPI(
@@ -14,6 +43,7 @@ app = FastAPI(
         "Multi-tenant feature flag and "
         "progressive rollout platform"
     ),
+    lifespan = lifespan,
 )
 
 app.include_router(

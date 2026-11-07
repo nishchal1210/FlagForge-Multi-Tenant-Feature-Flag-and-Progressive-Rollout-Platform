@@ -1,5 +1,8 @@
 pyproject.toml
-flagforage_sdk/__init__.py
+flagforge_sdk/__init__.py
+flagforge_sdk/client.py
+flagforge_sdk/evaluator.py
+flagforge_sdk/exceptions.py
 flagforge_sdk.egg-info/PKG-INFO
 flagforge_sdk.egg-info/SOURCES.txt
 flagforge_sdk.egg-info/dependency_links.txt

@@ -1,0 +1,1 @@
+{"version":4,"checksum":"789608516d9b40204bcd3b10dc8379ec893cf4eb9519572437a9ee10cf9df60b","configuration":{"flags":{"reliability_test":{"id":"a714c0a3-e90e-4356-8757-8b4831bfe62c","rules":[],"enabled":true,"default_value":true}},"environment":{"id":"b3ae10c6-a019-4213-93e1-06efce31cbaf","key":"reliability_test"},"schema_version":1}}

@@ -1,5 +1,6 @@
 from typing import Annotated
-
+from dataclasses import dataclass
+import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import (
     HTTPAuthorizationCredentials,
@@ -7,7 +8,7 @@ from fastapi.security import (
 )
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.db.session import get_db, SessionLocal
 from app.models.environment_sdk_key import EnvironmentSDKKey
 from app.security.sdk_keys import (
     extract_key_id,
@@ -17,14 +18,18 @@ from app.security.sdk_keys import (
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+@dataclass(frozen=True)
+class SDKPrincipal:
+    key_id: uuid.UUID
+    environment_id: uuid.UUID
+
 
 def authenticate_sdk_key(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None,
         Depends(bearer_scheme),
     ],
-    db: Annotated[Session, Depends(get_db)],
-) -> EnvironmentSDKKey:
+) -> SDKPrincipal:
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -40,19 +45,26 @@ def authenticate_sdk_key(
             detail="Invalid SDK key",
         )
 
-    sdk_key = db.get(EnvironmentSDKKey, key_id)
-
-    if (
-        sdk_key is None
-        or sdk_key.revoked_at is not None
-        or not verify_sdk_key(
-            plain_key,
-            sdk_key.key_hash,
-        )
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or revoked SDK key",
+    with SessionLocal() as db:
+        sdk_key = db.get(
+            EnvironmentSDKKey,
+            key_id,
         )
 
-    return sdk_key
+        if (
+            sdk_key is None
+            or sdk_key.revoked_at is not None
+            or not verify_sdk_key(
+                plain_key,
+                sdk_key.key_hash,
+            )
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or revoked SDK key",
+            )
+
+        return SDKPrincipal(
+            key_id=sdk_key.id,
+            environment_id=sdk_key.environment_id,
+        )

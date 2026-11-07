@@ -19,7 +19,16 @@ from app.services.config_snapshot import (
     build_configuration,
     calculate_checksum,
 )
+import logging
 
+from redis.exceptions import RedisError
+
+from app.services.config_events import (
+    publish_config_update,
+)
+
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Configuration Versions"])
 
@@ -101,6 +110,17 @@ def publish_configuration(
     db.add(config_version)
     db.commit()
     db.refresh(config_version)
+
+    try:
+        publish_config_update(
+            environment_id=environment.id,
+            version=config_version.version,
+            checksum=config_version.checksum,
+        )
+    except RedisError:
+        logger.exception(
+            "Failed to publish configuration update event"
+        )
 
     return config_version
 
