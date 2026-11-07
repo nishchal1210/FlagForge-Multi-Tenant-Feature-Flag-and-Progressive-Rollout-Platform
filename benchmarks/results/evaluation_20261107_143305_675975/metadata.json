@@ -1,0 +1,14 @@
+{
+  "timestamp_utc": "2026-11-07T14:33:05.731307+00:00",
+  "python": "3.12.4",
+  "os": "Windows-11-10.0.26300-SP0",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-1260P",
+  "git_commit": "f00699598aa0b077263bdb712b140e262e8a01c7",
+  "git_dirty": false,
+  "settings": {
+    "samples": 20000,
+    "repeats": 3,
+    "warmup": 2000,
+    "mode": "sequential, fixed user and selected flag"
+  }
+}
