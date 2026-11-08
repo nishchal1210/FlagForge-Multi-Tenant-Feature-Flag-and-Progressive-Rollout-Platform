@@ -15,6 +15,8 @@
   <img alt="Local SDK evaluation" src="https://img.shields.io/badge/SDK-local_evaluation-7C3AED?style=flat-square">
 </p>
 
+[![FlagForge CI](https://github.com/nishchal1210/FlagForge-Multi-Tenant-Feature-Flag-and-Progressive-Rollout-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/nishchal1210/FlagForge-Multi-Tenant-Feature-Flag-and-Progressive-Rollout-Platform/actions/workflows/ci.yml)
+
 [Architecture](#architecture) · [Quick start](#quick-start) · [SDK](#python-sdk) · [Benchmarks](#benchmarks) · [Reliability](#reliability) · [Roadmap](#roadmap)
 
 </div>
