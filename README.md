@@ -11,6 +11,7 @@
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white">
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white">
   <img alt="Redis" src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white">
+  <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white">
   <img alt="Local SDK evaluation" src="https://img.shields.io/badge/SDK-local_evaluation-7C3AED?style=flat-square">
 </p>
 
@@ -21,6 +22,8 @@
 ---
 
 FlagForge separates **deploying code** from **releasing a feature**. An administrator can enable a new checkout for 15% of Indian users, increase the rollout to 30%, and propagate the change to running applications without restarting them.
+
+**Run it locally:** Docker Compose starts the API, PostgreSQL and Redis, applies migrations, and optionally runs an SDK demonstration with a persistent cache.
 
 The FastAPI backend manages configuration. A separate Python SDK downloads published snapshots and makes runtime decisions **inside the application's process**. Redis and SSE notify SDKs about changes; individual flag evaluations require no network access.
 
@@ -127,9 +130,136 @@ Enabling a flag makes its rules active; it does not automatically make its resul
 
 ## Quick start
 
-The current development workflow runs locally with PostgreSQL and Redis. Docker Compose packaging is planned.
+**The complete local stack runs with Docker Compose.** Start the backend, publish a configuration, then launch the SDK consumer to watch live updates and offline recovery.
 
-### 1. Install Python dependencies
+### 1. Configure the local stack
+
+Install and start Docker Desktop with Linux containers. From the repository root, using PowerShell:
+
+```powershell
+docker version
+docker compose version
+Copy-Item .env.docker.example .env.docker
+```
+
+The example environment contains local development database settings and an initially empty SDK key:
+
+```dotenv
+POSTGRES_DB=flagforge
+POSTGRES_USER=flagforge
+POSTGRES_PASSWORD=flagforge_local_dev
+FLAGFORGE_SDK_KEY=
+```
+
+Keep `.env.docker` private. The SDK key is generated after the backend starts; it is not needed to build or start the API.
+
+### 2. Build and start
+
+```powershell
+docker compose --env-file .env.docker up --build -d
+docker compose --env-file .env.docker ps -a
+```
+
+Open **[Swagger UI on localhost:8001](http://localhost:8001/docs)**.
+
+| Service | Role | Expected state |
+| --- | --- | --- |
+| `postgres` | PostgreSQL 16 with a persistent data volume | Healthy |
+| `redis` | Redis 7 for update notifications | Healthy |
+| `migrate` | One-shot `alembic upgrade head` | Exited with code `0` |
+| `api` | FastAPI on container port `8000` | Healthy |
+| `demo` | Optional SDK consumer | Starts after key configuration |
+
+The API waits for healthy dependencies and successful migrations. Only the API is exposed to Windows, at `127.0.0.1:8001`; PostgreSQL and Redis stay on the Compose network.
+
+**A fresh Docker volume starts with an empty database.** Migrations create the schema; they do not import records from an existing Windows PostgreSQL installation. Local and container databases remain separate.
+
+### 3. Publish a demonstration flag
+
+In Swagger, create these resources in order and retain their returned IDs:
+
+| Resource | Request body |
+| --- | --- |
+| Tenant | `{"name": "Acme"}` |
+| Project under that tenant | `{"name": "Storefront", "key": "storefront"}` |
+| Environment under that project | `{"name": "Production", "key": "production"}` |
+| Flag in that environment | `{"key": "reliability_test", "name": "Reliability Test", "enabled": true, "default_value": false}` |
+
+Leave this flag without targeting rules for the initial demo. Publish its environment, then create an SDK key with `{"name": "docker-demo"}` using the environment's `/sdk-keys` endpoint.
+
+Copy the full returned `key` into `.env.docker`. The plaintext key is displayed only when created. Use the key for the same environment you just published.
+
+### 4. Start the SDK consumer
+
+```powershell
+docker compose --env-file .env.docker --profile demo up -d demo
+docker compose --env-file .env.docker logs -f demo
+```
+
+Expected output includes:
+
+```text
+flag=reliability_test value=False reason=DEFAULT_VALUE priority=None bucket=None
+```
+
+The consumer evaluates every two seconds and polls for configuration every five seconds alongside its SSE connection. Pressing Ctrl+C exits log-following without stopping the container.
+
+### 5. Change a release without restarting
+
+In Swagger, patch `reliability_test`:
+
+```json
+{"default_value": true}
+```
+
+Before publication, the SDK continues reporting `False`. Publish the environment again: the running SDK adopts the snapshot and starts reporting `True`.
+
+**That is the core demonstration: draft edit → explicit publication → live SDK update.**
+
+## Docker operations
+
+| Setting | Windows / host | Inside Compose |
+| --- | --- | --- |
+| API URL | `http://localhost:8001` | `http://api:8000` |
+| Database host | Not published | `postgres:5432` |
+| Redis host | Not published | `redis:6379` |
+| Database storage | Named volume `flagforge_postgres_data` | `/var/lib/postgresql/data` |
+| SDK cache storage | Named volume `flagforge_sdk_cache` | `/data/flagforge-production.json` |
+
+The container demo uses `http://api:8000`. A Python SDK process running directly on Windows uses `http://localhost:8001` for the Docker-backed API. Changing the host port does not change internal container addresses.
+
+View backend logs:
+
+```powershell
+docker compose --env-file .env.docker logs --tail 100 migrate api
+```
+
+After changing application source, rebuild:
+
+```powershell
+docker compose --env-file .env.docker --profile demo up --build -d
+```
+
+Stop the stack and remove containers while preserving database and cache volumes:
+
+```powershell
+docker compose --env-file .env.docker --profile demo down
+```
+
+Restart it with the same environment file:
+
+```powershell
+docker compose --env-file .env.docker --profile demo up -d
+```
+
+**Do not add `-v` unless you intend to delete the database and SDK-cache volumes.** PostgreSQL initialization credentials are applied when its data volume is first created; changing `.env.docker` later does not automatically change existing database users or passwords.
+
+The API container's health check verifies that HTTP serving is available. It is not a continuous dependency-readiness check. Images contain code and dependencies; persistent application data belongs to the named volumes.
+
+<details>
+<summary><strong>Run without Docker: Python + local PostgreSQL + Redis</strong></summary>
+
+### Install dependencies
 
 From the repository root, using Windows PowerShell:
 
@@ -144,7 +274,7 @@ python -m pip install pytest
 
 Python 3.12.4 was used for the recorded tests and benchmarks.
 
-### 2. Configure PostgreSQL and Redis
+### Configure local services
 
 Start PostgreSQL and create a database named `flagforge`. Create a local `.env` in the repository root:
 
@@ -155,8 +285,7 @@ REDIS_URL=redis://localhost:6379/0
 
 Replace the sample database credentials with your local values. Keep `.env` and SDK secrets out of version control.
 
-<details>
-<summary><strong>Windows: run Redis through Ubuntu / WSL</strong></summary>
+**Windows: Redis through Ubuntu / WSL**
 
 If Ubuntu is not installed, run the following in an Administrator PowerShell terminal and complete the installation prompts. Restart Windows if requested.
 
@@ -181,9 +310,8 @@ python -c "from redis import Redis; print(Redis.from_url('redis://localhost:6379
 
 The expected response is `True`.
 
-</details>
 
-### 3. Apply migrations and start the backend
+### Apply migrations and start FastAPI
 
 ```powershell
 alembic upgrade head
@@ -192,18 +320,29 @@ uvicorn app.main:app --reload
 
 Open **[Swagger UI](http://127.0.0.1:8000/docs)** to create resources and publish configurations.
 
-### 4. Create the first release
 
-In Swagger, create these resources in order, retaining each response's ID:
+This workflow uses `http://localhost:8000`, while the Docker workflow uses host port `8001`. For a Python consumer targeting the local API, set:
 
-| Resource | Request body |
-| --- | --- |
-| Tenant | `{"name": "Acme"}` |
-| Project under that tenant | `{"name": "Storefront", "key": "storefront"}` |
-| Environment under that project | `{"name": "Production", "key": "production"}` |
-| Flag in that environment | `{"key": "new_checkout", "name": "New checkout", "enabled": true, "default_value": false}` |
+```powershell
+$env:FLAGFORGE_BASE_URL = "http://127.0.0.1:8000"
+```
 
-Add this rule to `new_checkout`:
+</details>
+
+## Targeted rollout example
+
+Within your existing environment, create another Boolean flag:
+
+```json
+{
+  "key": "new_checkout",
+  "name": "New checkout",
+  "enabled": true,
+  "default_value": false
+}
+```
+
+Add this rule through the flag's `/rules` endpoint:
 
 ```json
 {
@@ -222,11 +361,11 @@ Add this rule to `new_checkout`:
 }
 ```
 
-Publish the environment, then create an SDK key with a body such as `{"name": "local-demo"}`. The key is scoped to that environment and its full plaintext value is returned only when created.
+Publish the environment. The SDK example below evaluates this flag for an Indian user; the result depends on that user's deterministic bucket. The container demo continues watching `reliability_test`.
 
 ## Python SDK
 
-The SDK is an independent installable package under `sdk/`. The following example uses an environment variable for the secret:
+The SDK is an independent installable package under `sdk/`. Docker installs it in the application image. To run this example directly on Windows, install it with `python -m pip install -e .\sdk`. The example defaults to the Docker-backed API on host port `8001` and uses an environment variable for the secret:
 
 ```powershell
 $env:FLAGFORGE_SDK_KEY = Read-Host "Paste the environment SDK key"
@@ -240,7 +379,10 @@ from flagforge_sdk import FlagForgeClient
 
 client = FlagForgeClient(
     sdk_key=os.environ["FLAGFORGE_SDK_KEY"],
-    base_url="http://127.0.0.1:8000",
+    base_url=os.environ.get(
+        "FLAGFORGE_BASE_URL",
+        "http://127.0.0.1:8001",
+    ),
     cache_path="./cache/flagforge-production.json",
 )
 
@@ -263,7 +405,7 @@ finally:
     client.close()
 ```
 
-This example evaluates once and closes. For the continuously running demonstration, configure `examples/sdk_demo.py` with your key and flag, then run:
+This example evaluates once and closes. For the continuously running demonstration, configure `examples/sdk_demo.py` with your key, flag and the appropriate base URL (`8001` for the Docker API; `8000` for the local API), then run:
 
 ```powershell
 python .\examples\sdk_demo.py
@@ -301,12 +443,41 @@ Further safeguards include checksum rejection, rejection of older versions and c
 
 Redis Pub/Sub is best-effort. PostgreSQL remains authoritative; polling recovers from lost notifications or a failure between database commit and event publication. Revoking a key blocks future downloads but does not erase configuration already held by an SDK.
 
+### Reproduce the container outage checks
+
+Start with the running demo reporting `True` from a published snapshot and follow its logs in another terminal.
+
+| Experiment | Action | Expected result |
+| --- | --- | --- |
+| Missed notifications | Stop Redis, change the flag and publish | SDK adopts the change through polling |
+| Server outage | Stop the API | SDK keeps evaluating from memory |
+| Restart during outage | Restart the existing demo container while API remains stopped | SDK initializes from its valid persistent cache |
+| Container recreation | Bring the stack down and back up without deleting volumes | Configuration, SDK keys and cached data survive |
+
+```powershell
+# Redis outage: publish a changed flag while Redis is stopped.
+docker compose --env-file .env.docker stop redis
+# After verifying polling recovery:
+docker compose --env-file .env.docker start redis
+
+# API outage: the initialized consumer continues evaluating.
+docker compose --env-file .env.docker stop api
+# Restart only the existing consumer, keeping the API offline.
+docker compose --env-file .env.docker restart demo
+# Restore the API after verifying disk-cache recovery.
+docker compose --env-file .env.docker start api
+```
+
+These manual Docker checks have been completed alongside the earlier cache-corruption and key-revocation checks. They complement the targeted automated suite below.
+
 ### Run the automated reliability suite
 
 ```powershell
 New-Item -ItemType Directory -Path ".pytest_tmp" -Force | Out-Null
 python -m pytest tests/sdk tests/realtime -q --basetemp=".pytest_tmp/milestone6"
 ```
+
+For local test execution, activate a virtual environment and install the project dependencies, editable SDK and `pytest` as described in the non-Docker setup.
 
 The targeted suite has **9 passing tests** covering local evaluation without HTTP requests, conditional refresh, preservation after invalid or failed updates, disk-cache recovery, older-version rejection, missing-flag fallback, environment-specific broadcasts and disconnected queues.
 
@@ -425,7 +596,11 @@ See Swagger for complete request schemas and resource-management routes. SDK key
 | `app/core/`, `app/db/` | Settings, Redis clients and database sessions |
 | `sdk/flagforge_sdk/` | Installable SDK client and local evaluator |
 | `migrations/` | Alembic database migrations |
-| `examples/sdk_demo.py` | Continuously running SDK consumer |
+| `examples/sdk_demo.py` | Continuously running local SDK consumer |
+| `examples/docker_demo.py` | Environment-configured container consumer with persistent cache |
+| `Dockerfile`, `.dockerignore` | Application image build and build-context exclusions |
+| `compose.yaml` | API, PostgreSQL, Redis, migration job and optional demo |
+| `.env.docker.example` | Committable example Docker configuration |
 | `tests/sdk/`, `tests/realtime/` | SDK reliability and queue-manager tests |
 | `benchmarks/` | Path, mixed-workload and rollout experiments |
 
@@ -448,7 +623,8 @@ See Swagger for complete request schemas and resource-management routes. SDK key
 - [x] Redis/SSE updates, polling and last-known-good recovery
 - [x] Targeted reliability suite and manual outage checks
 - [x] Path and mixed-workload benchmarks with recorded results
-- [ ] Docker Compose packaging and reproducible demo setup
+- [x] Docker Compose packaging, automatic migrations and persistent volumes
+- [x] Containerized SDK demo, live updates and outage/restart checks
 - [ ] CI automation and broader API/integration/concurrency coverage
 - [ ] Authenticated administrative tenant authorization
 - [ ] Shared, exhaustive snapshot validation for download and cache loading

@@ -1,0 +1,85 @@
+name: flagforge
+
+x-app: &app
+  image: flagforge:local
+  build:
+    context: .
+  environment:
+    DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+    REDIS_URL: "redis://redis:6379/0"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=3).close()"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  demo:
+    image: flagforge:local
+    profiles: ["demo"]
+    command: ["python", "examples/docker_demo.py"]
+    environment:
+      FLAGFORGE_BASE_URL: "http://api:8000"
+      FLAGFORGE_SDK_KEY: "${FLAGFORGE_SDK_KEY:-}"
+    volumes:
+      - sdk_cache:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    init: true
+
+volumes:
+  postgres_data:
+  sdk_cache:
