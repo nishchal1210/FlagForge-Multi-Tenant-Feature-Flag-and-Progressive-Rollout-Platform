@@ -3,3 +3,4 @@ directory_design.txt
 milestones.md
 .env.docker
 .pytest_tmp/
+.env.ci
