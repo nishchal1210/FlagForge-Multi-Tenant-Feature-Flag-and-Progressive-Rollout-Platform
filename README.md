@@ -483,6 +483,17 @@ The targeted suite has **9 passing tests** covering local evaluation without HTT
 
 `--basetemp` is dedicated test storage that pytest clears between runs. These tests use mocked HTTP responses and the in-process queue manager; they do not require running PostgreSQL, Redis or FastAPI and do not constitute a full Redis-to-SSE integration test.
 
+### Continuous integration coverage
+
+The [FlagForge CI workflow](.github/workflows/ci.yml) runs on pushes, pull requests and manual dispatches. Both jobs [passed on 8 November 2026](https://github.com/nishchal1210/FlagForge-Multi-Tenant-Feature-Flag-and-Progressive-Rollout-Platform/actions/runs/42455756640).
+
+- **Targeted reliability tests:** Runs the nine tests in `tests/sdk` and `tests/realtime` on Python 3.12.
+- **Docker builds and migrations:** Validates the Compose configuration, builds and starts the backend with PostgreSQL and Redis, and applies Alembic migrations before the API starts.
+- **Real API-to-SDK publication checks:** Runs [`scripts/ci_smoke.py`](scripts/ci_smoke.py) against the containerized API using the actual Python SDK. It creates resources and an SDK key, publishes an initial snapshot, then publishes a changed version and verifies that SDK evaluation changes after refresh.
+- **Draft isolation, unchanged refresh and key revocation:** Verifies that unpublished edits stay invisible to the SDK, an unchanged refresh returns `False`, a revoked key receives `401`, and the SDK retains its active local configuration.
+
+**Still awaiting their own automated coverage:** End-to-end Redis-to-SSE delivery and reconnection, full service-outage and recovery scenarios, and concurrent refresh/evaluation testing. The manual Docker outage checks above remain separate from the checks CI runs.
+
 ## Benchmarks
 
 ### Mixed user-and-flag workload
@@ -625,7 +636,9 @@ See Swagger for complete request schemas and resource-management routes. SDK key
 - [x] Path and mixed-workload benchmarks with recorded results
 - [x] Docker Compose packaging, automatic migrations and persistent volumes
 - [x] Containerized SDK demo, live updates and outage/restart checks
-- [ ] CI automation and broader API/integration/concurrency coverage
+- [x] CI: nine targeted reliability tests, Docker builds/migrations and API-to-SDK publication checks
+- [ ] Automated end-to-end SSE, full outage scenarios and concurrent refresh/evaluation coverage
+- [ ] Broader API and integration coverage
 - [ ] Authenticated administrative tenant authorization
 - [ ] Shared, exhaustive snapshot validation for download and cache loading
 - [ ] Propagation-latency and refresh-contention experiments
